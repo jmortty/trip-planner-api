@@ -2,35 +2,143 @@ const express = require('express');
 const Trip = require('../models/Trip');
 const router = express.Router();
 
-// GET /user/:userId/orders
+/**
+ * @swagger
+ * /user/{userId}/orders:
+ *   get:
+ *     summary: Retrieve all trips for a user
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: A list of user trips
+ */
 router.get('/user/:userId/orders', async (req, res) => {
-  const trips = await Trip.find({ userId: req.params.userId }).populate('destinationId');
-  res.json(trips);
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const trips = await Trip.find({ userId: req.params.userId })
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .populate('destinationId');
+    const count = await Trip.countDocuments({ userId: req.params.userId });
+    res.json({
+      trips,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// GET /trip/:tripId
+/**
+ * @swagger
+ * /trip/{tripId}:
+ *   get:
+ *     summary: Get detailed information about a specific trip
+ *     parameters:
+ *       - in: path
+ *         name: tripId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Trip details
+ */
 router.get('/trip/:tripId', async (req, res) => {
-  const trip = await Trip.findById(req.params.tripId).populate('destinationId');
-  res.json(trip);
+  try {
+    const trip = await Trip.findById(req.params.tripId).populate('destinationId');
+    if (!trip) return res.status(404).json({ message: 'Trip not found' });
+    res.json(trip);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// POST /trip
+/**
+ * @swagger
+ * /trip:
+ *   post:
+ *     summary: Create a new trip
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       201:
+ *         description: Trip created
+ */
 router.post('/trip', async (req, res) => {
-  const trip = new Trip(req.body);
-  await trip.save();
-  res.status(201).json(trip);
+  try {
+    const trip = new Trip(req.body);
+    await trip.save();
+    res.status(201).json(trip);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-// PUT /trip/:tripId
+/**
+ * @swagger
+ * /trip/{tripId}:
+ *   put:
+ *     summary: Update an existing trip
+ *     parameters:
+ *       - in: path
+ *         name: tripId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Trip updated
+ */
 router.put('/trip/:tripId', async (req, res) => {
-  const trip = await Trip.findByIdAndUpdate(req.params.tripId, req.body, { new: true });
-  res.json(trip);
+  try {
+    const trip = await Trip.findByIdAndUpdate(req.params.tripId, req.body, { new: true });
+    if (!trip) return res.status(404).json({ message: 'Trip not found' });
+    res.json(trip);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-// DELETE /trip/:tripId
+/**
+ * @swagger
+ * /trip/{tripId}:
+ *   delete:
+ *     summary: Delete a trip
+ *     parameters:
+ *       - in: path
+ *         name: tripId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Trip deleted
+ */
 router.delete('/trip/:tripId', async (req, res) => {
-  await Trip.findByIdAndDelete(req.params.tripId);
-  res.json({ message: 'Trip deleted' });
+  try {
+    const trip = await Trip.findByIdAndDelete(req.params.tripId);
+    if (!trip) return res.status(404).json({ message: 'Trip not found' });
+    res.json({ message: 'Trip deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
