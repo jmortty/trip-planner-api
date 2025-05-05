@@ -1,5 +1,6 @@
 const express = require('express');
 const Trip = require('../models/Trip');
+const Destination = require('../models/Destination');
 const router = express.Router();
 
 /**
@@ -21,14 +22,14 @@ router.get('/user/:userId/orders', async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const trips = await Trip.find({ userId: req.params.userId })
+      .populate('destinationId')
       .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .populate('destinationId');
+      .skip((page - 1) * limit);
     const count = await Trip.countDocuments({ userId: req.params.userId });
     res.json({
       trips,
       totalPages: Math.ceil(count / limit),
-      currentPage: page
+      currentPage: page,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -53,7 +54,9 @@ router.get('/user/:userId/orders', async (req, res) => {
 router.get('/trip/:tripId', async (req, res) => {
   try {
     const trip = await Trip.findById(req.params.tripId).populate('destinationId');
-    if (!trip) return res.status(404).json({ message: 'Trip not found' });
+    if (!trip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
     res.json(trip);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -77,7 +80,18 @@ router.get('/trip/:tripId', async (req, res) => {
  */
 router.post('/trip', async (req, res) => {
   try {
-    const trip = new Trip(req.body);
+    const { userId, destinationId, startDate, endDate, status } = req.body;
+
+    if (!userId || !destinationId || !startDate || !endDate) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const destinationExists = await Destination.findById(destinationId);
+    if (!destinationExists) {
+      return res.status(400).json({ message: 'Invalid destinationId' });
+    }
+
+    const trip = new Trip({ userId, destinationId, startDate, endDate, status });
     await trip.save();
     res.status(201).json(trip);
   } catch (err) {
@@ -108,9 +122,14 @@ router.post('/trip', async (req, res) => {
  */
 router.put('/trip/:tripId', async (req, res) => {
   try {
-    const trip = await Trip.findByIdAndUpdate(req.params.tripId, req.body, { new: true });
-    if (!trip) return res.status(404).json({ message: 'Trip not found' });
-    res.json(trip);
+    const updatedTrip = await Trip.findByIdAndUpdate(req.params.tripId, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!updatedTrip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+    res.json(updatedTrip);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -133,8 +152,10 @@ router.put('/trip/:tripId', async (req, res) => {
  */
 router.delete('/trip/:tripId', async (req, res) => {
   try {
-    const trip = await Trip.findByIdAndDelete(req.params.tripId);
-    if (!trip) return res.status(404).json({ message: 'Trip not found' });
+    const deletedTrip = await Trip.findByIdAndDelete(req.params.tripId);
+    if (!deletedTrip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
     res.json({ message: 'Trip deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
